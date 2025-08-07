@@ -1,22 +1,11 @@
 use std::collections::HashMap;
-
-
 use crate::schema::{Schema};
-use crate::schema::DataType;
+use crate::row::{Row, Value};
 
+#[derive(Debug)]
 pub struct Table {
-    schema: Schema,
-    rows: HashMap<u64, Row>,
-}
-
-struct Row {
-    values: Vec<Value> 
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Value {
-    String(String),
-    Integer(i64),
+    pub schema: Schema,
+    pub rows: HashMap<u64, Row>,
 }
 
 impl Table {
@@ -27,41 +16,23 @@ impl Table {
         }
     }
 
-    pub fn add_row(&mut self, row: Vec<Value>) {
-        let mut row = row;
-        self.row_validator(&mut row);
-        
+    pub fn add_row(&mut self, row_values: Vec<Value>) {
+        let row = Row::new(&self.schema, row_values);
         let row_id = self.rows.len() as u64;
-
-        self.rows.insert(row_id, Row { values: row });
+        self.rows.insert(row_id, Row { values: row.values });
     }
 
     pub fn delete_row(&mut self, index: u64){
         self.rows.remove(&index);
     }
 
-    pub fn edit_row(&mut self, index: u64, mut row: Vec<Value>) {
-        self.row_validator(&mut row); // ✅ now mutable
-        self.rows.insert(index, Row { values: row });
+    pub fn edit_row(&mut self, index: u64, row_values: Vec<Value>) {
+        let row = Row::new(&self.schema, row_values);
+        self.rows.insert(index, Row { values: row.values });
     }
 
-    fn row_validator(&mut self, row: &mut Vec<Value>) {
-        for (index, value) in row.iter_mut().enumerate() {
-            let expected_type = &self.schema.columns[index].data_type;
-            let value_clone = value.clone();
-
-            match (expected_type, &value_clone) {
-                (DataType::String, Value::String(_)) => {},
-                (DataType::Integer, Value::Integer(_)) => {},
-                _ => panic!("Type mismatch at column {}: expected {:?}, got {:?}", index, expected_type, value_clone),
-            }
-            
-            *value = self.apply_row_constraints(value_clone);
-        }
-    }
-
-    fn apply_row_constraints(&mut self, value: Value) -> Value {
-        value
+    pub fn get_row(&self, index: u64) -> Option<&Row> {
+        self.rows.get(&index)
     }
 }
 
@@ -69,16 +40,15 @@ impl Table {
 #[cfg(test)]
 mod table_tests {
     use super::*;
-    use crate::schema::Column;
+    use crate::column::{Column, DataType};
+    use crate::schema::{Schema};
 
     // ---------- Helpers ----------
     fn make_schema() -> Schema {
-        Schema {
-            columns: vec![
-                Column { name: "id".to_string(), data_type: DataType::Integer, index: 0, constraints: None },
-                Column { name: "name".to_string(), data_type: DataType::String, index: 1, constraints: None },
-            ]
-        }
+        Schema::new(vec![
+            Column { name: "id".to_string(), data_type: DataType::Integer, constraints: HashMap::new()},
+            Column { name: "name".to_string(), data_type: DataType::String, constraints: HashMap::new()},
+        ]).unwrap()
     }
 
     fn make_table() -> Table {
@@ -154,7 +124,7 @@ mod table_tests {
         table.add_row(row_int_str(1, "Alice"));
 
         let invalid_row = vec![
-            Value::String("Not an integer".to_string()), // Should be Integer
+            Value::String("Not an integer".to_string()),
             Value::String("Bob".to_string()),
         ];
 

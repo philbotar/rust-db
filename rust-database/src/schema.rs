@@ -1,158 +1,128 @@
+use crate::column::{Column, DataType};
+use crate::row::Value;
+use std::collections::{HashMap, HashSet};
 
-use std::collections::HashSet;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum DataType { 
-    String,
-    Integer,
+// ========================================================================================
+// ENUMS
+// ========================================================================================
+#[derive(Debug, PartialEq)]
+pub enum SchemaError {
+    DuplicateColumnName(String),
+    IndexOutOfBounds { name: String, index: usize, len: usize },
+    DefaultValueTypeMismatch { column_name: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ConstraintType {
-    NotNull,
-    Unique,
-    Default(DataType),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Constraint {
-    pub constraint_type: ConstraintType,
-}
-
-#[derive(Clone)]
-pub struct Column { 
-    pub name: String,
-    pub data_type: DataType,
-    pub index: usize,
-    pub constraints: Option<HashSet<Constraint>>,
-}
-
-#[derive(Clone)]
-pub struct Schema { 
+// ========================================================================================
+// STRUCTS
+// ========================================================================================
+#[derive(Clone, Debug, PartialEq)]
+pub struct Schema {
     pub columns: Vec<Column>,
+    pub name_to_index: HashMap<String, usize>, // fast lookup
 }
 
+
+// ========================================================================================
+// IMPLEMENTATIONS
+// ========================================================================================
+
+// Notes: the schema should only ever exist if all the columns are correct. 
+// We do NOT create a schema otherwise. We pass in the columns at once. 
 impl Schema {
-    pub fn new(columns: Vec<Column>) -> Self {
-        let schema = Schema { columns };
-
-        if !Schema::schema_validator(schema.clone()) {
-            panic!("Schema validation failed");
-        }
-
-        schema
+    pub fn new(columns: Vec<Column>) -> Result<Self, SchemaError> {
+        // ? Postpend means it returns early on failure. 
+        Self::validate_column_uniqueness(&columns)?;
+        let name_to_index = Self::create_name_to_index(&columns)?;
+        Ok(Self { columns, name_to_index })
     }
 
-    // Simple collision check. See if theres a column in that location, and that the names are unique. 
-    fn schema_validator(schema: Schema) -> bool {
-        let mut columns_used = vec![false; schema.columns.len()];
-        let mut unique_names = HashSet::<String>::new();
+    // Validates that theres uniqueness when there needs to be. We are borrowing columns, not taking the real values. 
+    fn validate_column_uniqueness(columns: &[Column]) -> Result<(), SchemaError> {
+        let mut column_names: HashSet<&str> = HashSet::new();
 
-        for (i, column) in schema.columns.iter().enumerate() {
-            Self::create_constraints_validator(column);
-
-            if columns_used[column.index] {
-                panic!("Duplicate column index found: {}", i);
-            } else if unique_names.contains(&column.name)  {
-                panic!("Duplicate column name found: {}", column.name)
-            } else {
-                columns_used[column.index] = true;
-                unique_names.insert(column.name.to_string());
+        for col in columns.iter() {
+            if !column_names.insert(&col.name) {
+                return Err(SchemaError::DuplicateColumnName(col.name.clone()));
             }
         }
 
-        true
+        Ok(())
     }
 
+    fn create_name_to_index(columns: &[Column]) -> Result<HashMap<String, usize>, SchemaError> {
+        let mut name_to_index: HashMap<String, usize> = HashMap::new();
 
-    fn create_constraints_validator(column: &Column) {
-        if let Some(constraints) = &column.constraints {
-            for constraint in constraints {
-                if let ConstraintType::Default(default_type) = &constraint.constraint_type {
-                    if column.data_type != *default_type {
-                        panic!(
-                            "Default constraint type mismatch for column '{}': column type is {:?}, default type is {:?}",
-                            column.name, column.data_type, default_type
-                        );
-                    }
-                }
+        for (i, col) in columns.iter().enumerate() {
+
+            if name_to_index.contains_key(&col.name) {
+                return Err(SchemaError::DuplicateColumnName(col.name.clone()));
             }
+
+            name_to_index.insert(col.name.clone(), i);
         }
+        
+        Ok(name_to_index)
     }
 }
 
 
-#[cfg(test)]
-mod schema_tests {
-    use super::*;
+impl Value {
+    pub fn get_data_type(&self) -> DataType {
+        match self {
+            Value::String(_) => DataType::String,
+            Value::Integer(_) => DataType::Integer,
+            Value::Null => DataType::Null,
+        }
+   }
+}
 
-    #[test]
-    #[should_panic(expected = "Duplicate column index found")]
-    fn test_duplicate_index() {
-        let columns = vec![
-            Column { name: "id".to_string(), data_type: DataType::Integer, index: 0, constraints: None },
-            Column { name: "name".to_string(), data_type: DataType::String, index: 0, constraints: None }, 
-        ];
-        Schema::new(columns);
+// ========================================================================================
+// TESTS
+// ========================================================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::column::{Column, ColumnBuilder, DataType};
+
+    struct SchemaBuilder {
+        columns: Vec<Column>,
+    }
+
+    impl SchemaBuilder {
+        fn new() -> Self {
+            Self {
+                columns: Vec::new(),
+            }
+        }
+
+        fn add_column(mut self, column: Column) -> Self {
+            self.columns.push(column);
+            self
+        }
+
+        fn build(self) -> Result<Schema, SchemaError> {
+            Schema::new(self.columns)
+        }
     }
 
     #[test]
-    #[should_panic(expected = "Duplicate column name found")]
     fn test_duplicate_name() {
-        let columns = vec![
-            Column { name: "id".to_string(), data_type: DataType::Integer, index: 0, constraints: None },
-            Column { name: "id".to_string(), data_type: DataType::String, index: 1, constraints: None }, 
-        ];
-        Schema::new(columns);
+        let result = SchemaBuilder::new()
+            .add_column(ColumnBuilder::new("id", DataType::Integer).build())
+            .add_column(ColumnBuilder::new("id", DataType::String).build())
+            .build();
+
+        assert_eq!(result, Err(SchemaError::DuplicateColumnName("id".to_string())));
     }
 
     #[test]
     fn test_valid_schema() {
-        let columns = vec![
-            Column { name: "id".to_string(), data_type: DataType::Integer, index: 0, constraints: None },
-            Column { name: "name".to_string(), data_type: DataType::String, index: 1, constraints: None },
-        ];
-        let schema = Schema::new(columns);
-        assert_eq!(schema.columns.len(), 2);
-    }
+        let result = SchemaBuilder::new()
+            .add_column(ColumnBuilder::new("id", DataType::Integer).build())
+            .add_column(ColumnBuilder::new("name", DataType::String).build())
+            .build();
 
-    #[test]
-    #[should_panic(expected = "Default constraint type mismatch for column")]
-    fn test_default_constraint_type_mismatch() {
-        let constraint = Constraint { constraint_type: ConstraintType::Default(DataType::String) };
-        let constraints = Some(HashSet::from([constraint]));
-        let columns = vec![
-            Column { name: "id".to_string(), data_type: DataType::Integer, index: 0, constraints },
-        ];
-        Schema::new(columns);
-    }
-
-    #[test]
-    fn test_valid_default_constraint() {
-        let constraint = Constraint { constraint_type: ConstraintType::Default(DataType::String) };
-        let constraints = Some(HashSet::from([constraint]));
-        let columns = vec![
-            Column { name: "name".to_string(), data_type: DataType::String, index: 0, constraints },
-        ];
-        let schema = Schema::new(columns);
-        assert_eq!(schema.columns.len(), 1);
-    }
-
-    #[test]
-    fn test_multiple_valid_constraints() {
-        let constraints = Some(HashSet::from([
-            Constraint { constraint_type: ConstraintType::NotNull },
-            Constraint { constraint_type: ConstraintType::Unique },
-            Constraint { constraint_type: ConstraintType::Default(DataType::Integer) },
-        ]));
-        
-        let columns = vec![
-            Column { name: "id".to_string(), data_type: DataType::Integer, index: 0, constraints },
-        ];
-
-        let schema = Schema::new(columns);
-        assert_eq!(schema.columns.len(), 1);
+        assert!(result.is_ok());
     }
 }
-
-

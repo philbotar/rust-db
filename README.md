@@ -13,21 +13,45 @@ What do we generally know about Relational Database systems such as MySQL?
 - Data is presented as a collection of Tables, each of which have rows and columns
 - Users have the ability to manipulate data in tabular form.
 
-So from what we know, how can we use this information to build out DB from scratch ?
+# How are we designing this?
 
-- We need to have the ability to have a variable amount of rows and columns.
-- We need a key for each row. This key will be unique identifier for each row in a table. this means we should start with a HashMap
+## Core Components
 
-* [x] Be able to create a schema
-* [x] Be able to create a database
-* [x] Be able to create Tables. Each table has a name, schema and metadata against it.
-* [x] Be able to add rows to a table
-* [ ] Add ability to have column constraints
-* [ ] Add "Check" Constraint (Expressions)
-* [ ] Add the ability to have foreign_keys.
-* [ ] Persist the data locally.
-* [ ] Be able to perform queries on the data
-* [ ] Add ability to have indexes against the data
+- database.rs
+  - create_table
+  - update_table_name
+  - delete_table
+- table.rs
+  - add_row
+  - delete_row
+  - update_row
+  - query_rows
+  - update_schema
+- row.rs
+  - constructor
+  - validate_row
+- column.rs
+  - not_null
+  - unique
+  - default
+  - constructor
+- schema.rs
+  - validate_schema
+
+# Our To-Do
+
+- [x] Be able to create a schema
+- [x] Be able to create a database
+- [x] Be able to create Tables. Each table has a name, schema and metadata against it.
+- [x] Be able to add rows to a table
+- [x] Add ability to have column constraints
+- [ ] Apply Constraints to each row.
+- [ ] Add "Check" Constraint (Expressions)
+- [ ] Add the ability to have foreign_keys.
+- [ ] Persist the data locally.
+- [ ] Be able to perform queries on the data
+- [ ] Add ability to have indexes against the data
+- [ ] Add ability to Partition the data(?)
 
 # What we are allowing ourselves to use?
 
