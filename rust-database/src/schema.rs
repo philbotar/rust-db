@@ -1,15 +1,19 @@
 use crate::column::{Column, DataType};
 use crate::row::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use thiserror::Error;
 
 
 // ========================================================================================
 // ENUMS
 // ========================================================================================
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum SchemaError {
+    #[error("Duplicate column name: {0}")]
     DuplicateColumnName(String),
+    #[error("Index out of bounds for column '{name}': index {index}, but length is {len}")]
     IndexOutOfBounds { name: String, index: usize, len: usize },
+    #[error("Default value type mismatch for column '{column_name}'")]
     DefaultValueTypeMismatch { column_name: String },
 }
 
@@ -26,44 +30,53 @@ pub struct Schema {
 // ========================================================================================
 // IMPLEMENTATIONS
 // ========================================================================================
-
-// Notes: the schema should only ever exist if all the columns are correct. 
-// We do NOT create a schema otherwise. We pass in the columns at once. 
 impl Schema {
     pub fn new(columns: Vec<Column>) -> Result<Self, SchemaError> {
-        // ? Postpend means it returns early on failure. 
-        Self::validate_column_uniqueness(&columns)?;
-        let name_to_index = Self::create_name_to_index(&columns)?;
+        Self::validate_default_value_types(&columns)?;
+        let name_to_index = Self::build_name_to_index_map(&columns)?;
         Ok(Self { columns, name_to_index })
     }
 
-    // Validates that theres uniqueness when there needs to be. We are borrowing columns, not taking the real values. 
-    fn validate_column_uniqueness(columns: &[Column]) -> Result<(), SchemaError> {
-        let mut column_names: HashSet<&str> = HashSet::new();
-
+    fn validate_default_value_types(columns: &[Column]) -> Result<(), SchemaError> {
         for col in columns.iter() {
-            if !column_names.insert(&col.name) {
-                return Err(SchemaError::DuplicateColumnName(col.name.clone()));
+            if let Some(constraint) = col.constraints.get(&crate::constraint_state::ConstraintKind::Default) {
+                if let crate::constraint_state::Constraint::WithValue(_, val) = constraint {
+                    if val.get_data_type() != col.data_type && val.get_data_type() != DataType::Null {
+                        return Err(SchemaError::DefaultValueTypeMismatch { column_name: col.name.clone() });
+                    }
+                }
             }
         }
-
         Ok(())
     }
 
-    fn create_name_to_index(columns: &[Column]) -> Result<HashMap<String, usize>, SchemaError> {
-        let mut name_to_index: HashMap<String, usize> = HashMap::new();
+    fn build_name_to_index_map(columns: &[Column]) -> Result<HashMap<String, usize>, SchemaError> {
+        let mut name_to_index: HashMap<String, usize> = HashMap::with_capacity(columns.len());
 
         for (i, col) in columns.iter().enumerate() {
-
-            if name_to_index.contains_key(&col.name) {
+            if name_to_index.insert(col.name.clone(), i).is_some() {
                 return Err(SchemaError::DuplicateColumnName(col.name.clone()));
             }
-
-            name_to_index.insert(col.name.clone(), i);
         }
-        
+
         Ok(name_to_index)
     }
+
+    pub fn get_column_by_name(&self, name: &str) -> Option<&Column> {
+        self.name_to_index.get(name).map(|&idx| &self.columns[idx])
+    }
+    
+    pub fn get_column_by_index(&self, index: usize) -> Option<&Column> {
+        self.columns.get(index)
+    }
+
+    pub fn get_column_index(&self, name: &str) -> Option<usize> {
+        self.name_to_index.get(name).copied()
+    }
+
+// get_column_index(&self, name: &str) -> Option<usize>
+// column_count(&self) -> usize
+
 }
 
 
