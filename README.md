@@ -40,15 +40,17 @@ What do we generally know about Relational Database systems such as MySQL?
 
 # Our To-Do
 
-- [x] Be able to create a schema
-- [x] Be able to create a database
-- [x] Be able to create Tables. Each table has a name, schema and metadata against it.
-- [x] Be able to add rows to a table
-- [x] Add ability to have column constraints
+- [X] Be able to create a schema
+- [X] Be able to create a database
+- [X] Be able to create Tables. Each table has a name, schema and metadata against it.
+- [X] Be able to add rows to a table
+- [X] Add ability to have column constraints
 - [ ] Apply Constraints to each row.
 - [ ] Add "Check" Constraint (Expressions)
 - [ ] Add the ability to have foreign_keys.
 - [ ] Persist the data locally.
+- [ ] Create a Tokenizer to split Queries into tokens
+- [ ] Create a Parser to convert tokens to an Abstract Syntax Tree
 - [ ] Be able to perform queries on the data
 - [ ] Add ability to have indexes against the data
 - [ ] Add ability to Partition the data(?)
