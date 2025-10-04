@@ -1,11 +1,7 @@
-use rust_database::{database::Database, schema::{Schema}, column::{Column, ColumnBuilder, DataType, Constraint, ConstraintKind}, row::{Value}};
+use rust_database::{database::Database, schema::{Schema}, column::{Column, ColumnBuilder, DataType}, constraint_state::{Constraint, ConstraintKind}, row::{Value}};
 
 fn main() {
     // What are our Steps? 
-    // 1. Create Database
-    // 2. Create Columns in Schema. 
-    // 3. Create Table with Columns 
-
     let mut database = Database::new();
 
     // Lets define our Columns.
@@ -36,7 +32,8 @@ fn main() {
                         ConstraintKind::Unique => builder.unique(),
                         ConstraintKind::Default => {
                             builder
-                        }
+                        },
+                        ConstraintKind::Index => builder.index(),
                     }
                 }
 
@@ -74,7 +71,10 @@ fn main() {
         Value::String("philipbotar@gmail.com".to_string()),
     ];
     
-    table.add_row(row);
+    match table.add_row(row) {
+        Ok(index) => println!("Row added at index {}", index),
+        Err(e) => eprintln!("Failed to add row: {:?}", e),
+    }
 
     if let Some(row) = table.get_row(0) {
         println!("{:?}", row);
