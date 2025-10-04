@@ -1,8 +1,6 @@
-// In src/column.rs
-
 use crate::row::Value;
-use std::collections::HashMap;
-
+use std::collections::{HashMap};
+use crate::constraint_state::{ConstraintKind, Constraint};
 
 // ==============================================================================
 // ENUMS
@@ -12,19 +10,6 @@ pub enum DataType {
     String,
     Integer,
     Null,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ConstraintKind {
-    NotNull,
-    Unique,
-    Default,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Constraint {
-    Unit(ConstraintKind),         
-    WithValue(ConstraintKind, Value), 
 }
 
 #[derive(Debug, PartialEq)]
@@ -83,7 +68,13 @@ impl ColumnBuilder {
             ConstraintKind::Default,
             Constraint::WithValue(ConstraintKind::Default, value),
         );
+
         Ok(self)
+    }
+
+    pub fn index(mut self) -> Self {
+        self.constraints.insert(ConstraintKind::Index, Constraint::Unit(ConstraintKind::Index));
+        self
     }
 
     pub fn build(self) -> Column {
@@ -161,6 +152,19 @@ mod tests {
         assert_eq!(
             column.constraints.get(&ConstraintKind::Default),
             Some(&Constraint::WithValue(ConstraintKind::Default, Value::Integer(1)))
+        );
+    }
+
+    
+    #[test]
+    fn test_adding_index() {
+        let column = ColumnBuilder::new("status", DataType::Integer).index().build();
+
+        assert_eq!(column.constraints.len(), 1);
+        assert!(column.constraints.contains_key(&ConstraintKind::Index));
+        assert_eq!(
+            column.constraints.get(&ConstraintKind::Index),
+            Some(&Constraint::Unit(ConstraintKind::Index))
         );
     }
 }
