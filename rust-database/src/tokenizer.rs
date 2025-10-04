@@ -31,6 +31,8 @@ pub enum Token {
     Where,
     Insert,
     Delete,
+    Into,
+    Values,
 
     // Identifiers and Literals
     Identifier(String),
@@ -75,9 +77,7 @@ pub enum Token {
 
 pub struct Tokenizer<'a> {
     input: &'a str,
-    // We only need one position tracker. position will point to the next character to be read.
     position: usize,
-    // ch holds the current character (as a byte) that we are looking at.
     ch: u8,
 }
 
@@ -200,11 +200,13 @@ impl<'a> Tokenizer<'a> {
         match ident.to_uppercase().as_str() {
             "SELECT" => Token::Select,
             "FROM" => Token::From,
+            "INTO" => Token::Into,
             "WHERE" => Token::Where,
             "INSERT" => Token::Insert,
             "DELETE" => Token::Delete,
             "AND" => Token::And,
             "OR" => Token::Or,
+            "VALUES" => Token::Values,
             _ => Token::Identifier(ident.to_string()),
         }
     }
@@ -355,6 +357,90 @@ mod tokenizer_tests {
             generated_tokens.push(token);
             if is_eof {
                 break;
+            }
+        }
+
+        assert_eq!(expected_tokens, generated_tokens);
+        Ok(())
+    }
+
+    #[test]
+    fn test_insert_statement() -> Result<(), TokenizerError> {
+        let query = "INSERT INTO table VALUES ('first','second', '3', '4th');";
+        let mut tokenizer = Tokenizer::new(query);
+
+        let expected_tokens = vec![
+            Token::Insert,
+            Token::Into,
+            Token::Identifier("table".to_string()),
+            Token::Identifier("VALUES".to_string()),
+            Token::OpenBracket,
+            Token::StringLiteral("first".to_string()),
+            Token::Comma,
+            Token::StringLiteral("second".to_string()),
+            Token::Comma,
+            Token::StringLiteral("3".to_string()),
+            Token::Comma,
+            Token::StringLiteral("4th".to_string()),
+            Token::CloseBracket,
+            Token::Semicolon,
+            Token::Eof,
+        ];
+
+        let mut generated_tokens = Vec::new();
+        loop {
+            let token = tokenizer.get_next_token()?;
+            let is_eof = token == Token::Eof;
+            generated_tokens.push(token);
+            if is_eof {
+            break;
+            }
+        }
+
+        assert_eq!(expected_tokens, generated_tokens);
+        Ok(())
+    }
+
+    #[test]
+    fn test_insert_statement_with_columns() -> Result<(), TokenizerError> {
+        let query = "INSERT INTO table (firstColumn, secondColumn, thirdColumn, fourthColumn) VALUES ('first','second', '3', '4th');";
+        let mut tokenizer = Tokenizer::new(query);
+
+        let expected_tokens = vec![
+            Token::Insert,
+            Token::Into,
+            Token::Identifier("table".to_string()),
+            Token::OpenBracket,
+            Token::Identifier("firstColumn".to_string()),
+            Token::Comma,
+            Token::Identifier("secondColumn".to_string()),
+            Token::Comma,
+            Token::Identifier("thirdColumn".to_string()),
+            Token::Comma,
+            Token::Identifier("fourthColumn".to_string()),
+            Token::CloseBracket,
+            Token::Values,
+            Token::OpenBracket,
+            Token::StringLiteral("first".to_string()),
+            Token::Comma,
+            Token::StringLiteral("second".to_string()),
+            Token::Comma,
+            Token::StringLiteral("3".to_string()),
+            Token::Comma,
+            Token::StringLiteral("4th".to_string()),
+            Token::CloseBracket,
+            Token::Semicolon,
+            Token::Eof,
+        ];
+
+
+        let mut generated_tokens = Vec::new();
+        loop {
+            let token = tokenizer.get_next_token()?;
+            let is_eof = token == Token::Eof;
+            generated_tokens.push(token);
+            if is_eof {
+            break;
             }
         }
 
